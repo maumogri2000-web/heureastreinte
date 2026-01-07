@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#4caf50">
+
+  <meta charset="UTF-8" />
+  <title>Planning 2026 - Astreintes & Gardes</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin:0; padding:0; }
+
+    .header { position: fixed; top:0; left:0; right:0; background:#fff; padding:20px; border-bottom:1px solid #ccc; z-index:100; display:flex; flex-wrap:wrap; align-items:flex-start; gap:20px; }
+
+    .hours-box { background:#eef; padding:15px; border-radius:8px; flex:1; }
+    .stats-box { background:#f7f7f7; padding:15px; border-radius:8px; flex:0 0 200px; }
+
+    h1, h2, h3 { margin-top: 0; }
+
+    .controls button { margin-right: 10px; padding: 8px 12px; cursor: pointer; border-radius: 5px; border: 1px solid #ccc; }
+    .selected { outline: 3px solid #333; }
+
+    .content { margin-top:250px; padding:20px; max-height: calc(100vh - 300px); overflow-y: auto; }
+
+    .month { margin-bottom: 40px; }
+    .calendar { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; max-width: 420px; }
+    .day { border: 1px solid #ccc; padding: 10px 0; text-align: center; cursor: pointer; border-radius: 5px; user-select: none; }
+    .green { background:#b6f2c2; }
+    .red { background:#f5b6b6; }
+    .orange { background:#ffd59e; }
+
+    .month-stats { background:#eef; padding:10px; border-radius:8px; margin-top:10px; }
+
+    .month-hour { margin-left:10px; font-weight:bold; }
+
+    .progress-container { background:#ddd; border-radius:8px; width:100%; height:25px; margin-top:10px; }
+    .progress-bar { background:#4caf50; height:100%; width:0%; border-radius:8px; text-align:center; color:#fff; line-height:25px; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="hours-box">
+    <h1>Planning 2026 – Astreintes & Gardes</h1>
+    <div class="controls">
+      <strong>Couleur sélectionnée :</strong><br><br>
+      <button data-color="green" style="background:#b6f2c2">Astreinte</button>
+      <button data-color="red" style="background:#f5b6b6">Garde</button>
+    </div>
+    <h3>Total annuel : <span id="totalHours">0</span> h</h3>
+    <div class="progress-container"><div id="progressBar" class="progress-bar">0%</div></div>
+  </div>
+
+  <div class="stats-box">
+    <h2>📊 Totaux annuels</h2>
+    Astreinte : <span id="yearAstreinte">0</span> jours<br>
+    Garde : <span id="yearGarde">0</span> jours
+  </div>
+</div>
+
+<div class="content" id="year"></div>
+
+<script>
+const year = 2026;
+const yearContainer = document.getElementById('year');
+let selectedColor = '';
+const monthNames = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+
+function key(date){ return 'availability-' + date; }
+function save(date, value){ value ? localStorage.setItem(key(date), value) : localStorage.removeItem(key(date)); }
+function load(date){ return localStorage.getItem(key(date)); }
+
+let monthsHours = JSON.parse(localStorage.getItem('astreinte-months')) || {};
+
+function updateHoursUI(){
+  let total = 0;
+  Object.keys(monthsHours).forEach(m => { total += monthsHours[m]; });
+  document.getElementById('totalHours').textContent = total;
+  const progress = Math.min((total/2000)*100,100).toFixed(1);
+  const bar = document.getElementById('progressBar');
+  bar.style.width = progress + '%';
+  bar.textContent = progress + '%';
+}
+updateHoursUI();
+
+// Couleurs
+document.querySelectorAll('.controls button').forEach(b => {
+  b.onclick = () => {
+    document.querySelectorAll('.controls button').forEach(x=>x.classList.remove('selected'));
+    b.classList.add('selected');
+    selectedColor = b.dataset.color;
+  };
+});
+
+let yearAstreinte = 0, yearGarde = 0;
+
+function renderMonths(){
+  yearContainer.innerHTML = '';
+  yearAstreinte = 0; yearGarde = 0;
+
+  for(let m=0; m<12; m++){
+    const monthDiv = document.createElement('div'); monthDiv.className='month';
+    const h2 = document.createElement('h2'); h2.textContent = monthNames[m]; monthDiv.appendChild(h2);
+
+    const cal = document.createElement('div'); cal.className='calendar';
+    const days = new Date(year, m+1, 0).getDate();
+    let mAstreinte=0, mGarde=0;
+
+    for(let d=1; d<=days; d++){
+      const date = `${year}-${m+1}-${d}`;
+      const div = document.createElement('div'); div.className='day'; div.textContent=d;
+      const saved = load(date);
+      if(saved) div.classList.add(saved);
+      if(saved==='green'){ mAstreinte++; yearAstreinte++; }
+      if(saved==='red'){ mGarde++; yearGarde++; }
+
+      div.onclick = () => {
+        if(!selectedColor){ div.classList.remove('green','red','orange'); save(date,null); }
+        else if(div.classList.contains(selectedColor)){ div.classList.remove('green','red','orange'); save(date,null); }
+        else{ div.classList.remove('green','red','orange'); div.classList.add(selectedColor); save(date,selectedColor); }
+        renderMonths();
+      };
+      cal.appendChild(div);
+    }
+
+    const statsDiv = document.createElement('div');
+    statsDiv.className='month-stats';
+    statsDiv.innerHTML = `Astreinte : ${mAstreinte} jours<br>Garde : ${mGarde} jours<br>Heures : <input type="number" value="${monthsHours[m+1]||0}" step="0.5" min="0"> h <button>Enregistrer</button>`;
+    const input = statsDiv.querySelector('input');
+    const button = statsDiv.querySelector('button');
+    button.onclick = () => {
+      monthsHours[m+1] = Number(input.value);
+      localStorage.setItem('astreinte-months', JSON.stringify(monthsHours));
+      updateHoursUI();
+      renderMonths();
+    };
+
+    monthDiv.appendChild(cal);
+    monthDiv.appendChild(statsDiv);
+    yearContainer.appendChild(monthDiv);
+  }
+
+  document.getElementById('yearAstreinte').textContent = yearAstreinte;
+  document.getElementById('yearGarde').textContent = yearGarde;
+}
+
+renderMonths();
+</script>
+
+<script>
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("./service-worker.js");
+}
+</script>
+
+</body>
+</html>
